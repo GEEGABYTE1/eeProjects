@@ -1,184 +1,110 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
+//improved neural net with dynamic functionality
 
-// Simple network that can learn XOR
-// Feartures : sigmoid activation function, stochastic gradient descent, and mean square error fuction
+#include "neuralnet.h"
 
-// Activation function and its derivative
-double sigmoid(double x) { return 1 / (1 + exp(-x)); }
-double dSigmoid(double x) { return x * (1 - x); }
-// Activation function and its derivative
-double init_weight() { return ((double)rand())/((double)RAND_MAX); }
+// activation functions and its derivatives 
+double sigmoid(double x) {return 1 / 1 + exp(-x);}
+double dSigmoid(double x) {return x * (1 - x);}
+double relu(double x) {return x > 0 ? x : 0;}
+double dRelu(double x) {return x > 0 ? 1 : 0;}
+double tanh_activation(double x) {return tanh(x);}
+double dTanh(double x) {return 1 - x * x;}
 
-// Shuffle the dataset
-void shuffle(int *array, size_t n)
-{
-    if (n > 1)
-    {
-        size_t i;
-        for (i = 0; i < n - 1; i++)
-        {
-            size_t j = i + rand() / (RAND_MAX / (n - i) + 1);
-            int t = array[j];
-            array[j] = array[i];
-            array[i] = t;
+//optimizer enum
+typedef enum {
+    SGD,
+    MOMENTUM,
+    RMSPROP,
+    ADAM 
+} Optimizer;
+
+//initialize neural network 
+
+NeuralNetwork* createNetwork(int numInputs, int numHiddenLayers, int *hiddenNodes, int numOutputs, double learningRate, ActivationFunction activation) {
+    NeuralNetwork *nn = (NeuralNetwork*)malloc(sizeof(NeuralNetwork));
+    nn->numInputs = numInputs;
+    nn->numHiddenLayers = numHiddenLayers;
+    nn->hiddenNodes = hiddenNodes;
+    nn->numOutputs = numOutputs;
+    nn->learningRate = learningRate;
+    nn->activation = activation;
+
+    srand(time(NULL));
+
+    //allocating weight and biases 
+    nn->hiddenWeights = (double **)malloc(numHiddenLayers * sizeof(double *));
+    nn->hiddenBiases = (double **)malloc(numHiddenLayers * sizeof(double *));
+    for (int l =0; l < numHiddenLayers; l++) {
+        int inputSize = (l == 0) ? numInputs : hiddenNodes[l-1];
+        nn->hiddenWeights[l] = (double *)malloc(inputSize * hiddenNodes[l] * sizeof(double));   
+        nn->hiddenBiases[l] = (double *)malloc(hiddenNodes[l] * sizeof(double));
+        for (int j=0; j < hiddenNodes[l]; j++) {
+            nn->hiddenBiases[l][j] = (double)rand() / RAND_MAX;
+            for (int i=0; i < inputSize; i++) {
+                nn->hiddenWeights[l][j*inputSize + i] = (double)rand() / RAND_MAX;
+            }
         }
     }
+
+    //outputting weights and biases
+    nn->outputWeights = (double *)malloc(hiddenNodes[numHiddenLayers-1]*sizeof(double));
+    nn->outputBias = (double)rand() / RAND_MAX;
+    for (int i =0; i < hiddenNodes[numHiddenLayers-1]; i++) {
+        nn->outputWeights[i] = (double)rand() / RAND_MAX;
+    }
+
+    return nn;
 }
 
-#define numInputs 2
-#define numHiddenNodes 2
-#define numOutputs 1
-#define numTrainingSets 4
 
-int main (void) {
 
-    const double lr = 0.1f;
-    
-    double hiddenLayer[numHiddenNodes];
-    double outputLayer[numOutputs];
-    
-    double hiddenLayerBias[numHiddenNodes];
-    double outputLayerBias[numOutputs];
+//training the thing
+void train(NeuralNetwork *nn, double **inputs, double **outputs, int numSamples, int epochs, Optimizer optimizer) {
+    double momentum = 0.9, beta1=0.9, beta2=0.999, epsilon=1e-8;
+    double *velocity = (double *)calloc(nn->hiddenNodes[nn->numHiddenLayers-1], sizeof(double));
+    double *squaredGrad = (double *)calloc(nn->hiddenNodes[nn->numHiddenLayers-1], sizeof(double));
 
-    double hiddenWeights[numInputs][numHiddenNodes];
-    double outputWeights[numHiddenNodes][numOutputs];
-    
+    for (int epoch = 0; epoch < epochs; epoch++) {
+        for (int sample =0; sample < numSamples; sample++) {
+            double *output = predict(nn, inputs[sample]);
+            double error = outputs[sample][0] - output[0];
+            double dOutput = error * dSigmoid(output[0]);
 
-    double training_inputs[numTrainingSets][numInputs] = {{0.0f,0.0f},
-                                                          {1.0f,0.0f},
-                                                          {0.0f,1.0f},
-                                                          {1.0f,1.0f}};
-    double training_outputs[numTrainingSets][numOutputs] = {{0.0f},
-                                                            {1.0f},
-                                                            {1.0f},
-                                                            {0.0f}};
-    
-    for (int i=0; i<numInputs; i++) {
-        for (int j=0; j<numHiddenNodes; j++) {
-            hiddenWeights[i][j] = init_weight();
+            //updating output weights given optimizer
+            for (int i =0; i < nn->hiddenNodes[nn->numHiddenLayers-1]; i++) {
+                double grad = nn->learningRate * dOutput * inputs[sample][i];
+                if (optimizer == MOMENTUM) {
+                    velocity[i] = momentum * velocity[i] + grad;
+                    nn->outputWeights[i] += velocity[i];
+                } else if (optimizer == RMSPROP) {
+                    squaredGrad[i] = beta2 * squaredGrad[i] + (1 - beta2) * grad * grad;
+                    nn->outputWeights[i] += grad / (sqrt(squaredGrad[i]) + epsilon);
+                } else if (optimizer == ADAM) {
+                    velocity[i] = beta1 * velocity[i] + (1 - beta1) * grad;
+                    squaredGrad[i] = beta2 * squaredGrad[i] + (1-beta2) * grad * grad;
+                    nn->outputWeights[i] += (velocity[i] / sqrt(squaredGrad[i] + epsilon));
+                } else  { // SGD 
+                    nn->outputWeights[i] += grad;
+
+                }
+                
+            }
+
+            nn->outputBias += nn->learningRate * dOutput;
+            free(output);
         }
     }
-    for (int i=0; i<numHiddenNodes; i++) {
-        hiddenLayerBias[i] = init_weight();
-        for (int j=0; j<numOutputs; j++) {
-            outputWeights[i][j] = init_weight();
-        }
-    }
-    for (int i=0; i<numOutputs; i++) {
-        outputLayerBias[i] = init_weight();
-    }
-    
-    int trainingSetOrder[] = {0,1,2,3};
-    
-    int numberOfEpochs = 10000;
-    // Train the neural network for a number of epochs
-    for(int epochs=0; epochs < numberOfEpochs; epochs++) {
-
-        // As per SGD, shuffle the order of the training set
-        shuffle(trainingSetOrder,numTrainingSets);
-
-        // Cycle through each of the training set elements
-        for (int x=0; x<numTrainingSets; x++) {
-            
-            int i = trainingSetOrder[x];
-            
-            // Forward pass
-            
-            // Compute hidden layer activation
-            for (int j=0; j<numHiddenNodes; j++) {
-                double activation = hiddenLayerBias[j];
-                 for (int k=0; k<numInputs; k++) {
-                    activation += training_inputs[i][k] * hiddenWeights[k][j];
-                }
-                hiddenLayer[j] = sigmoid(activation);
-            }
-            
-            // Compute output layer activation
-            for (int j=0; j<numOutputs; j++) {
-                double activation = outputLayerBias[j];
-                for (int k=0; k<numHiddenNodes; k++) {
-                    activation += hiddenLayer[k] * outputWeights[k][j];
-                }
-                outputLayer[j] = sigmoid(activation);
-            }
-            
-            // Print the results from forward pass
-            printf ("Input:%g %g  Output:%g    Expected Output: %g\n",
-                    training_inputs[i][0], training_inputs[i][1],
-                    round(outputLayer[0]), training_outputs[i][0]);
-
-
-
-            // Backprop
-            
-            // Compute change in output weights
-            double deltaOutput[numOutputs];
-            for (int j=0; j<numOutputs; j++) {
-                double errorOutput = (training_outputs[i][j] - outputLayer[j]);
-                deltaOutput[j] = errorOutput * dSigmoid(outputLayer[j]);
-            }
-            
-            // Compute change in hidden weights
-            double deltaHidden[numHiddenNodes];
-            for (int j=0; j<numHiddenNodes; j++) {
-                double errorHidden = 0.0f;
-                for(int k=0; k<numOutputs; k++) {
-                    errorHidden += deltaOutput[k] * outputWeights[j][k];
-                }
-                deltaHidden[j] = errorHidden * dSigmoid(hiddenLayer[j]);
-            }
-            
-            // Apply change in output weights
-            for (int j=0; j<numOutputs; j++) {
-                outputLayerBias[j] += deltaOutput[j] * lr;
-                for (int k=0; k<numHiddenNodes; k++) {
-                    outputWeights[k][j] += hiddenLayer[k] * deltaOutput[j] * lr;
-                }
-            }
-            
-            // Apply change in hidden weights
-            for (int j=0; j<numHiddenNodes; j++) {
-                hiddenLayerBias[j] += deltaHidden[j] * lr;
-                for(int k=0; k<numInputs; k++) {
-                    hiddenWeights[k][j] += training_inputs[i][k] * deltaHidden[j] * lr;
-                }
-            }
-        }
-    }
-    
-    // Print final weights after training
-    fputs ("Final Hidden Weights\n[ ", stdout);
-    for (int j=0; j<numHiddenNodes; j++) {
-        fputs ("[ ", stdout);
-        for(int k=0; k<numInputs; k++) {
-            printf ("%f ", hiddenWeights[k][j]);
-        }
-        fputs ("] ", stdout);
-    }
-    
-    fputs ("]\nFinal Hidden Biases\n[ ", stdout);
-    for (int j=0; j<numHiddenNodes; j++) {
-        printf ("%f ", hiddenLayerBias[j]);
-    }
-
-    fputs ("]\nFinal Output Weights", stdout);
-    for (int j=0; j<numOutputs; j++) {
-        fputs ("[ ", stdout);
-        for (int k=0; k<numHiddenNodes; k++) {
-            printf ("%f ", outputWeights[k][j]);
-        }
-        fputs ("]\n", stdout);
-    }
-
-    fputs ("Final Output Biases\n[ ", stdout);
-    for (int j=0; j<numOutputs; j++) {
-        printf ("%f ", outputLayerBias[j]);
-        
-    }
-    
-    fputs ("]\n", stdout);
-
-    return 0;
+    free(velocity);
+    free(squaredGrad);
 }
+
+void freeNetwork(NeuralNetwork *nn) {
+    for (int l =0; l< nn->numHiddenLayers; l++) {
+        free(nn->hiddenWeights[l]);
+        free(nn->hiddenBiases[l]); 
+    }
+    free(nn->hiddenWeights);
+    free(nn->hiddenBiases);
+    free(nn->outputWeights);
+    free(nn);
+}   
