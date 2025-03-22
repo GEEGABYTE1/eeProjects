@@ -12,5 +12,5 @@ void freeDataset(double **inputs, double **outputs, int numSamples) {
         free(outputs[i]);
     }
     free(inputs);
-    free(outputs)
+    free(outputs);
 }

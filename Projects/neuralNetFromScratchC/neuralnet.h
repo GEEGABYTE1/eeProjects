@@ -21,11 +21,18 @@ typedef enum {
     TANH
 } ActivationFunction;
 
+typedef enum {
+    SGD,
+    MOMENTUM,
+    RMSPROP,
+    ADAM
+} Optimizer;
+
 // Neural Network Structure
 typedef struct {
     int numInputs;
     int numHiddenLayers;
-    int *hiddenNodes;  // storing array for multiple hidden layers
+    int *hiddenNodes;  // Array for multiple hidden layers
     int numOutputs;
     double **hiddenWeights;
     double **hiddenBiases;
@@ -37,7 +44,7 @@ typedef struct {
 
 // Neural Network Functions
 NeuralNetwork* createNetwork(int numInputs, int numHiddenLayers, int *hiddenNodes, int numOutputs, double learningRate, ActivationFunction activation);
-void train(NeuralNetwork *nn, double **inputs, double **outputs, int numSamples, int epochs);
+void train(NeuralNetwork *nn, double **inputs, double **outputs, int numSamples, int epochs, Optimizer optimizer);
 double* predict(NeuralNetwork *nn, double *input);
 void freeNetwork(NeuralNetwork *nn);
 void saveModel(NeuralNetwork *nn, const char *filename);

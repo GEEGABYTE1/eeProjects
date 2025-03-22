@@ -9,13 +9,7 @@ double dRelu(double x) { return x > 0 ? 1 : 0; }
 double tanh_activation(double x) { return tanh(x); }
 double dTanh(double x) { return 1 - pow(tanh(x), 2); }
 
-// Optimizer Enum
-typedef enum {
-    SGD,
-    MOMENTUM,
-    RMSPROP,
-    ADAM
-} Optimizer;
+
 
 // Initialize Neural Network
 NeuralNetwork* createNetwork(int numInputs, int numHiddenLayers, int *hiddenNodes, int numOutputs, double learningRate, ActivationFunction activation) {
@@ -53,53 +47,44 @@ NeuralNetwork* createNetwork(int numInputs, int numHiddenLayers, int *hiddenNode
     return nn;
 }
 
-// Train the Neural Network with metrics
-void train(NeuralNetwork *nn, double **inputs, double **outputs, int numSamples, int epochs, Optimizer optimizer) {
-    double momentum = 0.9, beta1 = 0.9, beta2 = 0.999, epsilon = 1e-8;
-    double *velocity = (double *)calloc(nn->hiddenNodes[nn->numHiddenLayers - 1], sizeof(double));
-    double *squaredGrad = (double *)calloc(nn->hiddenNodes[nn->numHiddenLayers - 1], sizeof(double));
+// Predict function
+double* predict(NeuralNetwork *nn, double *input) {
+    double *currentInput = input;
 
-    FILE *logFile = fopen("training_log.csv", "w");
-    fprintf(logFile, "Epoch,Loss,Accuracy\n");
+    // Forward pass through hidden layers
+    for (int l = 0; l < nn->numHiddenLayers; l++) {
+        double *hiddenOutput = (double *)malloc(nn->hiddenNodes[l] * sizeof(double));
+        int inputSize = (l == 0) ? nn->numInputs : nn->hiddenNodes[l - 1];
 
-    for (int epoch = 0; epoch < epochs; epoch++) {
-        double totalLoss = 0.0;
-        int correct = 0;
-        for (int sample = 0; sample < numSamples; sample++) {
-            double *output = predict(nn, inputs[sample]);
-            double error = outputs[sample][0] - output[0];
-            double dOutput = error * dSigmoid(output[0]);
-
-            totalLoss += error * error;
-            correct += (round(output[0]) == outputs[sample][0]);
-
-            // Update output weights with chosen optimizer
-            for (int i = 0; i < nn->hiddenNodes[nn->numHiddenLayers - 1]; i++) {
-                double grad = nn->learningRate * dOutput * inputs[sample][i];
-                if (optimizer == MOMENTUM) {
-                    velocity[i] = momentum * velocity[i] + grad;
-                    nn->outputWeights[i] += velocity[i];
-                } else if (optimizer == RMSPROP) {
-                    squaredGrad[i] = beta2 * squaredGrad[i] + (1 - beta2) * grad * grad;
-                    nn->outputWeights[i] += grad / (sqrt(squaredGrad[i]) + epsilon);
-                } else if (optimizer == ADAM) {
-                    velocity[i] = beta1 * velocity[i] + (1 - beta1) * grad;
-                    squaredGrad[i] = beta2 * squaredGrad[i] + (1 - beta2) * grad * grad;
-                    nn->outputWeights[i] += (velocity[i] / (sqrt(squaredGrad[i]) + epsilon));
-                } else { // SGD
-                    nn->outputWeights[i] += grad;
-                }
+        for (int j = 0; j < nn->hiddenNodes[l]; j++) {
+            double activation = nn->hiddenBiases[l][j];
+            for (int i = 0; i < inputSize; i++) {
+                activation += currentInput[i] * nn->hiddenWeights[l][j * inputSize + i];
             }
-            nn->outputBias += nn->learningRate * dOutput;
-            free(output);
+
+            // Apply activation function
+            if (nn->activation == SIGMOID) {
+                hiddenOutput[j] = sigmoid(activation);
+            } else if (nn->activation == RELU) {
+                hiddenOutput[j] = relu(activation);
+            } else if (nn->activation == TANH) {
+                hiddenOutput[j] = tanh_activation(activation);
+            }
         }
-        double averageLoss = totalLoss / numSamples;
-        double accuracy = (double)correct / numSamples;
-        fprintf(logFile, "%d,%.6f,%.2f%%\n", epoch + 1, averageLoss, accuracy * 100);
+        if (l > 0) free(currentInput);
+        currentInput = hiddenOutput;
     }
-    fclose(logFile);
-    free(velocity);
-    free(squaredGrad);
+
+    // Output layer
+    double *output = (double *)malloc(nn->numOutputs * sizeof(double));
+    double activation = nn->outputBias;
+    for (int i = 0; i < nn->hiddenNodes[nn->numHiddenLayers - 1]; i++) {
+        activation += currentInput[i] * nn->outputWeights[i];
+    }
+    output[0] = sigmoid(activation); // Output activation is sigmoid
+
+    free(currentInput);
+    return output;
 }
 
 // Free memory
