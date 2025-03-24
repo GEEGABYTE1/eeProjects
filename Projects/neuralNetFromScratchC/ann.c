@@ -11,6 +11,10 @@
 double sigmoid(double x) { return 1 / (1 + exp(-x)); }
 double dSigmoid(double x) { return x * (1 - x); }
 // Activation function and its derivative
+double relu(double x) { return x > 0 ? x : 0; }
+double dRelu(double x) { return x > 0 ? 1 : 0; }
+double tanh_activation(double x) { return tanh(x); }
+double dTanh(double x) { return 1 - pow(tanh(x), 2); }
 double init_weight() { return ((double)rand())/((double)RAND_MAX); }
 
 // Shuffle the dataset

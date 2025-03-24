@@ -1,6 +1,6 @@
 # Neural Network from Scratch in C 
 
-Implementation of multi-layer regression neural network from scratch in C. It supports different activation functions and optimizers: SGD, Momentum, RMSprop, Adam.
+Implementation of multi-layer regression neural network from scratch in C. It supports different activation functions: RELU, Sigmoid, TanH.
 
 
 1. **Forward Pass:**
@@ -27,44 +27,36 @@ Implementation of multi-layer regression neural network from scratch in C. It su
      \]
      where \( \eta \) is the learning rate.
 
-3. **Optimizers:**
-   - Momentum: Accelerates SGD by adding a fraction of the previous update.
-   - RMSprop: Adapts learning rate by scaling gradients based on recent magnitudes.
-   - Adam: Combines momentum and RMSprop for more efficient convergence.
 
 
 ## Running the Model
 
 Build the project:
 ```bash
-make
+gcc -o ann.c -lm
 ```
 
 Run the Neural Network:
 ```bash 
-./neuralnet
+./ann
 ```
 
-Plotting the results
-```
-run all code cells in viz.ipynb
-```
-
-Cleaning up
-```bash
-make clean
-```
 
 ## Dataset Format
-The dataset should be a *.txt* file with the following format:
-```
-<num_samples>
-<input_1> <input_2> ... <input_n> <output_1> <output_2> ... <output_m>
+The dataset is written within implementation:
+```C
+    double training_inputs[numTrainingSets][numInputs] = {{0.0f,0.0f},
+                                                          {1.0f,0.0f},
+                                                          {0.0f,1.0f},
+                                                          {1.0f,1.0f}};
+    double training_outputs[numTrainingSets][numOutputs] = {{0.0f},
+                                                            {1.0f},
+                                                            {1.0f},
+                                                            {0.0f}};
 ```
 
-Example (XOR dataset):
+Resulting Example (XOR dataset):
 ```
-4
 0 0 0
 0 1 1
 1 0 1
