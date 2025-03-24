@@ -1,15 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <arm_neon.h>  
-#include <time.h>       
+#include <time.h>       // For timing
 
-#define N 227  // input
-#define K 11   // kernel
+#define N 227  // Input size for AlexNet (227x227)
+#define K 11   // Kernel size (first convolution)
 #define C 3    // Input channels
-#define F 96   // filters for conv layer
-#define BLOCK_SIZE 8  
+#define F 96   // Number of filters in the first conv layer
+#define BLOCK_SIZE 32  // Cache blocking size
 
-
+// Normal Convolution (Baseline)
 void conv2d_baseline(float input[N][N][C], float output[N-K+1][N-K+1][F], float weights[K][K][C][F], float bias[F]) {
     for (int f = 0; f < F; f++) {
         for (int i = 0; i < N - K + 1; i++) {
@@ -28,24 +27,24 @@ void conv2d_baseline(float input[N][N][C], float output[N-K+1][N-K+1][F], float 
     }
 }
 
-// optimized with SIMD
+// Optimized Convolution with Cache Blocking + Loop Unrolling
 void conv2d_optimized(float input[N][N][C], float output[N-K+1][N-K+1][F], float weights[K][K][C][F], float bias[F]) {
     for (int f = 0; f < F; f++) {
         for (int i = 0; i < N - K + 1; i += BLOCK_SIZE) {
             for (int j = 0; j < N - K + 1; j += BLOCK_SIZE) {
                 for (int bi = i; bi < i + BLOCK_SIZE && bi < N - K + 1; bi++) {
                     for (int bj = j; bj < j + BLOCK_SIZE && bj < N - K + 1; bj++) {
-                        float32x4_t sum_vec = vdupq_n_f32(0.0f);
+                        float sum = 0.0f;
                         for (int c = 0; c < C; c++) {
                             for (int ki = 0; ki < K; ki++) {
-                                for (int kj = 0; kj < K; kj++) {
-                                    float val = input[bi + ki][bj + kj][c];
-                                    float w = weights[ki][kj][c][f];
-                                    sum_vec = vaddq_f32(sum_vec, vmulq_n_f32(vdupq_n_f32(val), w));
+                                for (int kj = 0; kj < K; kj += 4) {  // Loop unrolling
+                                    sum += input[bi + ki][bj + kj][c] * weights[ki][kj][c][f];
+                                    if (kj + 1 < K) sum += input[bi + ki][bj + kj + 1][c] * weights[ki][kj + 1][c][f];
+                                    if (kj + 2 < K) sum += input[bi + ki][bj + kj + 2][c] * weights[ki][kj + 2][c][f];
+                                    if (kj + 3 < K) sum += input[bi + ki][bj + kj + 3][c] * weights[ki][kj + 3][c][f];
                                 }
                             }
                         }
-                        float sum = vgetq_lane_f32(sum_vec, 0) + vgetq_lane_f32(sum_vec, 1) + vgetq_lane_f32(sum_vec, 2) + vgetq_lane_f32(sum_vec, 3);
                         output[bi][bj][f] = sum + bias[f];
                     }
                 }
@@ -82,7 +81,7 @@ int main() {
         bias[f] = rand() / (float)RAND_MAX;
     }
 
-
+    // Measure baseline performance
     clock_t start_baseline = clock();
     conv2d_baseline(input, output_baseline, weights, bias);
     clock_t end_baseline = clock();
@@ -94,6 +93,7 @@ int main() {
     clock_t end_optimized = clock();
     double optimized_time = (double)(end_optimized - start_optimized) / CLOCKS_PER_SEC;
 
+    // Print performance metrics
     printf("Baseline Convolution Time: %.4f seconds\n", baseline_time);
     printf("Optimized Convolution Time: %.4f seconds\n", optimized_time);
     printf("Speedup: %.2fx\n", baseline_time / optimized_time);
