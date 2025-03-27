@@ -1,14 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>       // For timing
+#include <time.h>       
 
-#define N 227  // Input size for AlexNet (227x227)
-#define K 11   // Kernel size (first convolution)
-#define C 3    // Input channels
-#define F 96   // Number of filters in the first conv layer
-#define BLOCK_SIZE 32  // Cache blocking size
+#define N 227  
+#define K 11  
+#define C 3    
+#define F 96  
+#define BLOCK_SIZE 32  
 
-// Normal Convolution (Baseline)
+
 void conv2d_baseline(float input[N][N][C], float output[N-K+1][N-K+1][F], float weights[K][K][C][F], float bias[F]) {
     for (int f = 0; f < F; f++) {
         for (int i = 0; i < N - K + 1; i++) {
@@ -27,7 +27,7 @@ void conv2d_baseline(float input[N][N][C], float output[N-K+1][N-K+1][F], float 
     }
 }
 
-// Optimized Convolution with Cache Blocking + Loop Unrolling
+// w/ cache blockign and loop unrolling
 void conv2d_optimized(float input[N][N][C], float output[N-K+1][N-K+1][F], float weights[K][K][C][F], float bias[F]) {
     for (int f = 0; f < F; f++) {
         for (int i = 0; i < N - K + 1; i += BLOCK_SIZE) {
@@ -81,19 +81,19 @@ int main() {
         bias[f] = rand() / (float)RAND_MAX;
     }
 
-    // Measure baseline performance
+
     clock_t start_baseline = clock();
     conv2d_baseline(input, output_baseline, weights, bias);
     clock_t end_baseline = clock();
     double baseline_time = (double)(end_baseline - start_baseline) / CLOCKS_PER_SEC;
 
-    // Measure optimized performance
+
     clock_t start_optimized = clock();
     conv2d_optimized(input, output_optimized, weights, bias);
     clock_t end_optimized = clock();
     double optimized_time = (double)(end_optimized - start_optimized) / CLOCKS_PER_SEC;
 
-    // Print performance metrics
+
     printf("Baseline Convolution Time: %.4f seconds\n", baseline_time);
     printf("Optimized Convolution Time: %.4f seconds\n", optimized_time);
     printf("Speedup: %.2fx\n", baseline_time / optimized_time);
