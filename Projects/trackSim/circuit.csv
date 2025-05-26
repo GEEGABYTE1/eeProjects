@@ -1,0 +1,5 @@
+name,length_m,radius_m,grip_level,sector_type
+Straight 1,300,,1.0,straight
+Corner 1,100,50,0.9,corner
+Straight 2,400,,1.0,straight
+Corner 2,120,60,0.95,corner
